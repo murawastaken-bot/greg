@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gibbons v. Ogden and Heffernan v. City of Paterson</title>
+<script>document.documentElement.classList.add('js');</script>
 <style>
   :root{--black:#111;--gray:#555;--light:#ddd;--pale:#f2f2f2;--white:#fff}
   *{box-sizing:border-box}
@@ -45,13 +46,39 @@
 
   :focus-visible{outline:3px solid var(--black);outline-offset:3px}
 
-  #egg{position:fixed;inset:0;background:var(--black);color:var(--white);display:none;z-index:100;
-    flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:16px}
-  #egg.open{display:flex}
-  #egg h2{border:0;margin:0 0 14px;padding:0;font-weight:300}
-  #egg video{max-width:95%;max-height:68vh;background:#000}
-  #egg button{font:inherit;font-size:20px;padding:12px 36px;margin-top:18px;background:var(--white);color:var(--black);border:0;cursor:pointer;min-height:52px}
-  #missing{display:none;max-width:560px}
+  /* page-load sequence */
+  nav{animation:dropIn .6s ease both}
+  #icon{animation:rise .7s .15s ease both}
+  header h1{animation:rise .8s .3s ease both}
+  header p{animation:rise .8s .5s ease both}
+  @keyframes dropIn{from{opacity:0;transform:translateY(-100%)}to{opacity:1;transform:none}}
+  @keyframes rise{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+  /* elements fade in and out as they enter and leave the screen */
+  .js .reveal{opacity:0;transform:translateY(28px);
+    transition:opacity .6s ease,transform .6s ease;transition-delay:var(--d,0s)}
+  .js .reveal.in{opacity:1;transform:none}
+  .js .reveal:not(.in){transition-delay:0s;transition-duration:.35s}
+  nav a{transition:border-color .2s ease,background .2s ease,color .2s ease}
+  nav a:hover{background:var(--black);color:var(--white)}
+  #icon{transition:transform .2s ease}
+  #icon:active{transform:scale(.85) rotate(-8deg)}
+
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation:none!important;transition:none!important}
+    .js .reveal{opacity:1;transform:none}
+    html{scroll-behavior:auto}
+  }
+
+  /* hidden easter egg: fullscreen video */
+  #egg{position:fixed;inset:0;background:#000;color:var(--white);display:none;z-index:100;
+    align-items:center;justify-content:center;text-align:center}
+  #egg.open{display:flex;animation:fadeIn .35s ease}
+  #egg video{width:100vw;height:100vh;object-fit:contain;background:#000}
+  #egg button{position:absolute;top:14px;right:14px;font:inherit;font-size:20px;padding:10px 26px;min-height:52px;
+    background:rgba(255,255,255,.9);color:var(--black);border:0;cursor:pointer;z-index:2}
+  #missing{display:none;max-width:560px;padding:20px}
 </style>
 </head>
 <body>
@@ -161,7 +188,6 @@
 
 <!-- hidden: tap the scales above the title 5 times -->
 <div id="egg" role="dialog" aria-modal="true" aria-label="Easter egg">
-  <h2>You found the Easter egg!</h2>
   <video id="eggVideo" controls playsinline preload="none" src="hood-irony.mp4"></video>
   <p id="missing">The video isn't in this folder. Save it as hood-irony.mp4 next to index.html and try again.</p>
   <button id="closeEgg" type="button">Close</button>
@@ -174,6 +200,25 @@
   var missing = document.getElementById('missing');
 
   vid.addEventListener('error', function(){ vid.style.display='none'; missing.style.display='block'; });
+  vid.addEventListener('ended', function(){ closeEgg(); });
+
+  // scroll reveal: fade in when on screen, fade out when off screen
+  (function(){
+    var sel = 'main h2, main h3, main > p, main > ul > li, main .box, main table';
+    var items = document.querySelectorAll(sel);
+    if (!('IntersectionObserver' in window)) { items.forEach(function(el){ el.classList.add('in'); }); return; }
+    items.forEach(function(el){
+      el.classList.add('reveal');
+      if (el.tagName === 'LI') {
+        var i = Array.prototype.indexOf.call(el.parentNode.children, el);
+        el.style.setProperty('--d', (i * 0.1) + 's');
+      }
+    });
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ e.target.classList.toggle('in', e.isIntersecting); });
+    }, { threshold: 0.12, rootMargin: '0px 0px -5% 0px' });
+    items.forEach(function(el){ io.observe(el); });
+  })();
 
   document.getElementById('icon').addEventListener('click', function(){
     taps++;
@@ -184,15 +229,28 @@
       egg.className = 'open';
       missing.style.display = 'none';
       vid.style.display = '';
+      var req = egg.requestFullscreen || egg.webkitRequestFullscreen;
+      if (req) { try { var fp = req.call(egg); if (fp && fp.catch) fp.catch(function(){}); } catch (err) {} }
       vid.load();
       var p = vid.play();
       if (p && p.catch) p.catch(function(){});
     }
   });
 
-  function closeEgg(){ egg.className = ''; vid.pause(); }
+  function closeEgg(){
+    egg.className = '';
+    vid.pause();
+    var fs = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fs) { var ex = document.exitFullscreen || document.webkitExitFullscreen; if (ex) { try { ex.call(document); } catch (err) {} } }
+  }
   document.getElementById('closeEgg').addEventListener('click', closeEgg);
   document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeEgg(); });
+  // leaving fullscreen (Esc, swipe, etc.) also closes the video
+  ['fullscreenchange','webkitfullscreenchange'].forEach(function(n){
+    document.addEventListener(n, function(){
+      if (!(document.fullscreenElement || document.webkitFullscreenElement) && egg.className === 'open') closeEgg();
+    });
+  });
 </script>
 </body>
 </html>
